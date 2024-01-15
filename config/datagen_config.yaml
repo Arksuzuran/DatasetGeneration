@@ -1,0 +1,25 @@
+---
+colors: ['red', 'green', 'blue', 'yellow']
+
+block_tower:
+  image_size: 112
+  epsilon: 100
+
+collision:
+  image_size: 448
+  pos_range: 3
+  speed_range: 10
+  epsilon: 100
+
+balls:
+  image_size: 112
+  pos_range: 3
+  speed_range: 3
+  epsilon: 100
+
+balls2D:
+  image_size: 112
+  pos_range: 3
+  speed_range: 3
+  epsilon: 100
+
