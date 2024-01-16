@@ -11,13 +11,13 @@ import random
 from skimage.metrics import peak_signal_noise_ratio
 import numpy as np
 
-from data_generator.video_loaders import BlocktowerLoader, BallsLoader, CollisionLoader
+from data_generator.data_loaders_cophy import BlocktowerLoader, BallsLoader, CollisionLoader
 
 # os.chdir(os.path.dirname(os.path.abspath(__file__)))
 parser = argparse.ArgumentParser()
 parser.add_argument('--epoch', default=1, type=int, help="Number of Epoch for training. Can be set to 0 for evaluation")
 parser.add_argument('--n_keypoints', default=4, type=int, help="Number of keypoints to use")
-parser.add_argument('--dataset', default="blocktower", type=str, help="Datasets, should be one of 'blocktower', 'balls' or 'collision")
+parser.add_argument('--dataset', default="balls", type=str, help="Datasets, should be one of 'blocktower', 'balls' or 'collision")
 parser.add_argument('--lr', default=0.0001, type=float, help="Learning Rate")
 parser.add_argument('--n_coefficients', default=4, type=int, help="Number of coefficients to use")
 parser.add_argument('--mode', default="fixed", type=str, help="'fixed': use fixed dilatation filter bank. 'learned': learn the filters via gradient descent")
@@ -164,20 +164,26 @@ def main():
         print("=== EPOCH ", epoch + 1, " ===")
         for i, x in enumerate(tqdm(train_dataloader, desc="Training")):
             rgb = x['rgb_cd'].to(device)
-            source, target = rgb[:, 0], rgb[:, 1]
-            out = model(source, target)
-            cost = get_loss(target, out["target"])
+            states = x["states"].to(device)
+            confounders = x["confounders"].to(device)
+            print("image\t\t [B, chosen_frames, channel, W, H]:\t", rgb.shape)
+            print("states\t\t [B, all_frames, n_obj, motion_attr]:\t", states.shape)
+            print("confounders\t [B, n_obj]:\t\t\t\t", confounders.shape)
 
-            optim.zero_grad()
-            cost[0].backward()
-            optim.step()
-
-        if epoch == 100:
-            optim = torch.optim.Adam(trained_params, lr=args.lr)
-
-        validate(model, val_dataloader)
-        torch.save(model.state_dict(), SAVE_PATH)
-    validate(model, val_dataloader)
+    #         source, target = rgb[:, 0], rgb[:, 1]
+    #         out = model(source, target)
+    #         cost = get_loss(target, out["target"])
+    #
+    #         optim.zero_grad()
+    #         cost[0].backward()
+    #         optim.step()
+    #
+    #     if epoch == 100:
+    #         optim = torch.optim.Adam(trained_params, lr=args.lr)
+    #
+    #     validate(model, val_dataloader)
+    #     torch.save(model.state_dict(), SAVE_PATH)
+    # validate(model, val_dataloader)
 
 
 if __name__ == '__main__':

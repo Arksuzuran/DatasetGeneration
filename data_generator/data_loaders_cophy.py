@@ -11,7 +11,7 @@ from data_generator.utils import read_config
 
 class VideoLoader(Dataset):
     def __init__(self, mode="train", resolution=112, load_cd=True, sampling_mode="rand",
-                 load_ab=False, load_state=False, load_confounders=False):
+                 load_ab=False, load_state=True, load_confounders=True):
         """
         Dataloader for BallsCF
         :param mode: 'train', 'test' or 'val' split
@@ -81,6 +81,7 @@ class VideoLoader(Dataset):
         if self.load_state:
 
             states = np.load(os.path.join(self.data_path, dir_name, 'cd', 'states.npy'))
+            out["states"] = states
 
             viewMatrix, projectionMatrix = self.get_projection_matrix()
             positions = states[..., :3]
@@ -94,7 +95,7 @@ class VideoLoader(Dataset):
                         pose_2d[-1].append(np.zeros(2))
             pose_2d = np.array(pose_2d)
             out["pose_2D_cd"] = pose_2d[r_cd, :, :]
-            print(states)
+
 
         if self.load_confounders:
             confounders = np.load(os.path.join(self.data_path, dir_name, 'confounders.npy'))
@@ -170,7 +171,7 @@ def get_rgb(filedir, sampling_mode, video_length):
         rgb, _, _ = torchvision.io.read_video(filedir, pts_unit="sec")
         rgb = 2 * (rgb / 255) - 1
         rgb = rgb.permute(0, 3, 1, 2)
-        r = list(range(150))
+        r = list(range(video_length))
     else:
         t = randint(0, int(0.15 * video_length)) if sampling_mode == "rand" else int(0.15 * video_length)
 

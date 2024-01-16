@@ -1,37 +1,120 @@
 ---
 colors: ['red', 'green', 'blue', 'yellow']
 root_data_path: ./data/
+logs_dir: ./logs/
 
 blocktower:
-  image_size: 112
+  # IO
+  data_dir: ./data/blocktower/
+
+  # Physical Engine
+  n_obj: 4
   epsilon: 100
-  video_length: 150
   seed: 1
+
+  # Video settings
+  image_size: 112
+  fps: 25
+  duration: 6
+  video_length: 150
+
+  # Generation settings
   n_rollout: 2
+  train_valid_ratio: 0.5
+
 
 collision:
-  image_size: 448
+  # IO
+  data_dir: ./data/collision/
+
+  # Physical Engine
   pos_range: 3
   speed_range: 10
   epsilon: 100
-  video_length: 75
   seed: 1
+
+  # Video settings
+  image_size: 448
+  fps: 25
+  duration: 3
+  video_length: 75
+
+  # Generation settings
   n_rollout: 2
+  train_valid_ratio: 0.5
+
 
 balls:
-  image_size: 112
+  # IO
+  data_dir: ./data/balls/
+
+  # Physical Engine
+  n_obj: 4
   pos_range: 3
   speed_range: 3
   epsilon: 100
-  video_length: 150
   seed: 1
+
+  # Video settings
+  image_size: 112
+  fps: 25
+  duration: 6
+  video_length: 150
+
+  # Generation settings
   n_rollout: 2
+  train_valid_ratio: 0.5
+
 
 balls2D:
-  image_size: 112
-  pos_range: 3
-  speed_range: 3
-  epsilon: 100
-  seed: 1
-  n_rollout: 2
+
+  # IO
+  data_dir: ./data/balls_2D/
+
+  # Physical Engine
+  n_ball: 4
+  # radius
+  attr_dim: 1
+  # x, y, xdot, ydot
+  state_dim: 4
+  # ddx, ddy
+  action_dim: 2
+  # none, spring, rod
+  relation_dim: 3
+
+  lim: [ -1., 1., -1., 1. ]
+  prior: [ 0.4, 0.3, 0.3 ]
+  num_workers: 1
+
+  # size of the latent causal graph
+  node_attr_dim: 0
+  edge_attr_dim: 1
+  edge_type_num: 3
+  # Video settings
+  time_step: 100  # 500
+  dt: 0.02        # 0.02
+  height_raw: 110
+  width_raw: 110
+  height: 64
+  width: 64
+  scale_size: 64
+  crop_size: 64
+
+  # Generation settings
+  n_rollout: 5
+  train_valid_ratio: 0.8
+
+  # For demo
+  batch_size: 1
+  random_seed: 1
+  stage: 'dy'
+  n_epoch: 1
+  n_his: 5
+  n_identify: 0
+  n_roll: 5
+
+
+
+
+
 

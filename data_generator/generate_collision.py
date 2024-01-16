@@ -10,29 +10,28 @@ import pybullet_data
 from time import time
 import matplotlib.pyplot as plt
 import argparse
-import yaml
+from utils import read_config
 
-try:
-    from yaml import CLoader as Loader, CDumper as Dumper
-except ImportError:
-    from yaml import Loader, Dumper
+cfg = read_config()
 
-config_filename = "../config/datagen_config.yaml"
-with open(config_filename, 'r') as ymlfile:
-    cfg = yaml.load(ymlfile, Loader=Loader)
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--dir_out', default='test/', type=str)
-parser.add_argument('--seed', default=0, type=int)
-parser.add_argument('--n_examples', default=3, type=int)
-args = parser.parse_args()
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--dir_out', default='test/', type=str)
+# parser.add_argument('--seed', default=0, type=int)
+# parser.add_argument('--n_examples', default=3, type=int)
+# args = parser.parse_args()
 
 COLORS = cfg['colors']
 
+LOGS_DIR = cfg['logs_dir']
 W = H = cfg['collision']['image_size']  # Image shape
 RANGE_POS = cfg['collision']['pos_range']
 RANGE_SPEED = cfg['collision']['speed_range']
 EPSILON = cfg['collision']['epsilon']  # Threshold for constraints
+FPS = cfg['collision']['fps']
+DURATION = cfg['collision']['duration']
+
+ARGS = cfg['collision']
+ARGS = argparse.Namespace(**ARGS)
 
 
 def check_bayes(alt_ab, alt_cd, ab, cd):
@@ -55,12 +54,13 @@ def check_counterfactual(alt_cd, cd, mass_permutation):
 
 
 class Generator:
-    def __init__(self, dir_out, seed, nb_examples):
-        self.dir_out = dir_out
-        self.seed = seed
+    def __init__(self, args):
+        self.args = args
+        self.data_dir = self.args.data_dir
+        self.seed = self.args.seed
 
-        random.seed(seed)
-        np.random.seed(seed)
+        random.seed(self.seed)
+        np.random.seed(self.seed)
 
         self.mass_permutation = [list(combo) for combo in product([1, 10], repeat=2)]
         self.logs_cf = {str(d): 0 for d in self.mass_permutation}
@@ -68,7 +68,7 @@ class Generator:
         self.logs_cylinder_orientation = {'up': 0, 'down': 0}
 
         self.list_time = []
-        self.nb_examples = nb_examples
+        self.nb_examples = self.args.n_rollout
 
         self.total_trial_counter = 0
         self.ab_trial_counter = 0
@@ -149,7 +149,7 @@ class Generator:
             childPipes.append(childPipe)
 
         for rank in range(len(towers)):  # Run the processes$
-            simulator = Simulator(25, 3, W=448, H=448)
+            simulator = Simulator(FPS, DURATION, W=W, H=H)
             p = mp.Process(target=simulator.run, args=(childPipes[rank], towers[rank], 0, colors, False))
             p.start()
             processes.append(p)
@@ -163,7 +163,7 @@ class Generator:
 
     def simulate_one(self, arena, colors):
         parentPipe, childPipe = mp.Pipe()
-        simulator = Simulator(25, 3, W=448, H=448)
+        simulator = Simulator(FPS, DURATION, W=W, H=H)
         p = mp.Process(target=simulator.run, args=(childPipe, arena, 0, colors, False))
         p.start()
         state, _ = parentPipe.recv()
@@ -179,7 +179,7 @@ class Generator:
             parentPipes.append(parentPipe)
             childPipes.append(childPipe)
 
-        simulator = Simulator(25, 3, W=W, H=H)
+        simulator = Simulator(FPS, DURATION, W=W, H=H)
         plane_id = random.randint(0, 3)
         p_ab = mp.Process(target=simulator.run, args=(childPipes[0], ab, plane_id, colors, True))
         p_cd = mp.Process(target=simulator.run, args=(childPipes[1], cd, plane_id, colors, True))
@@ -199,7 +199,7 @@ class Generator:
         assert ab.confounders == cd.confounders
         assert len(cf_cubes) > 0
 
-        out_dir = self.dir_out + str(self.seed) + "_" + str(n) + "/"
+        out_dir = os.path.join(self.data_dir, str(self.seed) + "_" + str(n) + "/")
         os.makedirs(out_dir, exist_ok=True)
         os.makedirs(out_dir + 'ab', exist_ok=True)
         os.makedirs(out_dir + 'cd', exist_ok=True)
@@ -237,7 +237,7 @@ class Generator:
             writer.write(cv2.cvtColor(rgb, cv2.COLOR_BGR2RGB))
         writer.release()
 
-        with open("../logs/logs_create_dataset_collision_" + str(self.seed) + ".txt", "a") as f:
+        with open(LOGS_DIR + "logs_create_dataset_collision_" + str(self.seed) + ".txt", "a") as f:
             f.write(
                 f"{n}/{self.nb_examples} in {self.total_trial_counter} trial ({self.ab_trial_counter} on AB, {self.cd_trial_counter} on CD), took {round(self.list_time[-1], 1)} seconds (Average {round(np.mean(self.list_time), 2)})\n")
 
@@ -443,5 +443,5 @@ class Simulator:
 
 
 if __name__ == '__main__':
-    g = Generator(dir_out=args.dir_out, seed=args.seed, nb_examples=args.n_examples)
+    g = Generator(args=ARGS)
     g.generate()

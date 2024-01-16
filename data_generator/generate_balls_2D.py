@@ -3,7 +3,6 @@ import time
 import os
 import cv2
 import numpy as np
-import random
 import pymunk
 from pymunk.vec2d import Vec2d
 from progressbar import ProgressBar
@@ -12,34 +11,48 @@ from matplotlib.collections import PatchCollection
 from matplotlib.patches import Circle
 
 from utils import rand_float, rand_int, calc_dis, norm, read_config
-from utils import init_stat, combine_stat, load_data, store_data
-from utils import resize, crop
+from utils import init_stat, combine_stat, store_data
+import argparse
 
 cfg = read_config()
 
+ARGS = cfg['balls2D']
+ARGS = argparse.Namespace(**ARGS)
 
 
 class Generator:
-    def __init__(self, dir_out, seed, nb_examples):
-        self.dir_out = dir_out
-        self.seed = seed
+    def __init__(self, args):
+        print(args)
+        self.args = args
 
-        random.seed(seed)
-        np.random.seed(seed)
+        self.data_dir = self.args.data_dir
+        self.stat_path = os.path.join(self.args.dataf, 'stat.h5')
+        self.stat = None
 
-        self.list_time = []
-        self.nb_examples = nb_examples
+        self.data_names = ['attrs', 'states', 'actions', 'rels']
 
-        self.total_trial_counter = 0
-        self.ab_trial_counter = 0
-        self.cd_trial_counter = 0
+        self.T = self.args.time_step
+        self.scale_size = self.args.scale_size
+        self.crop_size = self.args.crop_size
 
     def generate(self):
+        for phase in ['train', 'valid']:
+            # n_rollout 一共生成的视频的数量
+            n_rollout = 0
+
+            ratio = self.args.train_valid_ratio
+            if phase in {'train'}:
+                n_rollout = int(self.args.n_rollout * ratio)
+            elif phase in {'valid'}:
+                n_rollout = self.args.n_rollout - int(self.args.n_rollout * ratio)
+            self.gen_phase(phase, n_rollout)
+
+    def gen_phase(self, phase, n_rollout):
         # if the data hasn't been generated, generate the data
-        n_rollout, time_step, dt = self.n_rollout, self.args.time_step, self.args.dt
+        time_step, dt = self.args.time_step, self.args.dt
         assert n_rollout % self.args.num_workers == 0
 
-        print("Generating data ... n_rollout=%d, time_step=%d" % (n_rollout, time_step))
+        print("Generating %s balls2D data ... n_rollout=%d, time_step=%d" % (phase, n_rollout, time_step))
 
         # 多进程，此处num_workers值一般为10
         # 根据传入参数来确定 等下要传给具体gen方法的参数
@@ -53,34 +66,23 @@ class Generator:
                     'time_step': time_step,
                     'dt': dt,
                     'video': False,
-                    'phase': self.phase,
+                    'phase': phase,
                     'args': self.args,
                     'vis_height': self.args.height_raw,
-                    'vis_width': self.args.width_raw}
-
-            if self.args.env in ['Ball']:
-                info['env'] = 'Ball'
-                info['n_ball'] = self.args.n_ball
+                    'vis_width': self.args.width_raw,
+                    'n_ball': self.args.n_ball}
 
             infos.append(info)
 
         cores = self.args.num_workers
         pool = mp.Pool(processes=cores)
 
-        env = self.args.env
+        # 调用gen_{env}方法，生成数据data
+        data = pool.map(self.gen_Ball, infos)
 
-        # 调用上面的gen_{env}方法，生成数据data
-        if env in ['Ball']:
-            data = pool.map(self.gen_Ball, infos)
-        else:
-            raise AssertionError("Unknown env")
-
-        print("Training data generated, warpping up stats ...")
-
-        if env in ['Ball']:
-            self.stat = [init_stat(self.args.attr_dim),
-                         init_stat(self.args.state_dim),
-                         init_stat(self.args.action_dim)]
+        self.stat = [init_stat(self.args.attr_dim),
+                     init_stat(self.args.state_dim),
+                     init_stat(self.args.action_dim)]
 
         # 即依次融合，求整个的stat
         # 这里的data：
@@ -93,7 +95,7 @@ class Generator:
         store_data(self.data_names[:len(self.stat)], self.stat, self.stat_path)
 
     # 生成小球的数据集
-    def gen_Ball(info):
+    def gen_Ball(self, info):
         thread_idx, data_dir, data_names = info['thread_idx'], info['data_dir'], info['data_names']
         n_rollout, time_step = info['n_rollout'], info['time_step']
         dt, video, args, phase = info['dt'], info['video'], info['args'], info['phase']
@@ -116,8 +118,8 @@ class Generator:
         bar = ProgressBar()
         for i in bar(range(n_rollout)):
             rollout_idx = thread_idx * n_rollout + i
-            rollout_dir = os.path.join(data_dir, str(rollout_idx))
-            os.system('mkdir -p ' + rollout_dir)
+            rollout_dir = os.path.join(data_dir, info['phase'], str(rollout_idx))
+            os.makedirs(rollout_dir, exist_ok=True)
 
             engine.init(n_ball)
 
@@ -273,17 +275,17 @@ class BallEngine(Engine):
         b = pymunk.Segment(self.space.static_body, (p_range[0], p_range[2]), (p_range[1], p_range[2]), 1)
         c = pymunk.Segment(self.space.static_body, (p_range[1], p_range[3]), (p_range[0], p_range[3]), 1)
         d = pymunk.Segment(self.space.static_body, (p_range[1], p_range[3]), (p_range[1], p_range[2]), 1)
-        a.friction = 1;
+        a.friction = 1
         a.elasticity = 1  # 摩擦系数1 弹性系数1：完全弹性碰撞
-        b.friction = 1;
+        b.friction = 1
         b.elasticity = 1
-        c.friction = 1;
+        c.friction = 1
         c.elasticity = 1
-        d.friction = 1;
+        d.friction = 1
         d.elasticity = 1
-        self.space.add(a);
+        self.space.add(a)
         self.space.add(b)
-        self.space.add(c);
+        self.space.add(c)
         self.space.add(d)
 
     # 添加所有小球
@@ -304,7 +306,7 @@ class BallEngine(Engine):
                     break
             # 添加新的刚体
             body = pymunk.Body(self.mass, inertia)
-            body.position = Vec2d((x, y))
+            body.position = Vec2d(x, y)
             # 其实所谓的小球就是质点
             # Circle(body: Body | None, radius: float, offset: Tuple[float, float] = (0, 0))
             shape = pymunk.Circle(body, 0., (0, 0))
@@ -412,7 +414,7 @@ class BallEngine(Engine):
             d = max(-20, min(-eps, p[1] - p_range[3]))
             impulse[1] += f_scale / d
 
-            self.balls[i].apply_impulse_at_local_point(impulse=impulse, point=(0, 0))
+            self.balls[i].apply_impulse_at_local_point(impulse=impulse.tolist(), point=(0, 0))
 
     def init(self, n_ball=5, init_impulse=True, param_load=None):
         # 定义空间
@@ -472,7 +474,7 @@ class BallEngine(Engine):
             return
         for i in range(self.n_ball):
             # apply_force_at_local_point(force: Tuple[float, float], point: Tuple[float, float] = (0, 0))
-            self.balls[i].apply_force_at_local_point(force=action[i], point=(0, 0))
+            self.balls[i].apply_force_at_local_point(force=action[i].tolist(), point=(0, 0))
 
     # 使用给定的力action进行一轮迭代
     def step(self, action=None):
@@ -490,6 +492,7 @@ class BallEngine(Engine):
 
         # 导出视频
         if video:
+            os.makedirs(path, exist_ok=True)
             video_path = path + '.avi'
             fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
             if verbose:
@@ -499,10 +502,9 @@ class BallEngine(Engine):
         # 导出图像
         if image:
             image_path = path
+            os.makedirs(image_path, exist_ok=True)
             if verbose:
                 print('Save images to %s' % image_path)
-            command = 'mkdir -p %s' % image_path
-            os.system(command)
 
         c = ['royalblue', 'tomato', 'limegreen', 'orange', 'violet', 'chocolate', 'black', 'crimson']
 
@@ -533,7 +535,7 @@ class BallEngine(Engine):
                 # 绘制两两小球之间的边
                 for x in range(n_ball):
                     for y in range(x):
-                        rel_type = int(param[cnt, 0]);
+                        rel_type = int(param[cnt, 0])
                         cnt += 1
                         if rel_type == 0:
                             continue
@@ -581,5 +583,5 @@ class BallEngine(Engine):
 
 
 if __name__ == '__main__':
-    g = Generator(dir_out=args.dir_out, seed=args.seed, nb_examples=args.n_examples)
+    g = Generator(args=ARGS)
     g.generate()

@@ -11,21 +11,28 @@ from time import time
 import argparse
 from utils import read_config
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--dir_out', default='test/', type=str, help="Where experiments should be saved")
-parser.add_argument('--seed', default=1, type=int, help="Random seed")
-parser.add_argument('--n_balls', default=3, type=int, help="# of balls in the scene")
-parser.add_argument('--n_examples', default=3, type=int, help="# of experiments to generate")
-args = parser.parse_args()
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--dir_out', default='test/', type=str, help="Where experiments should be saved")
+# parser.add_argument('--seed', default=1, type=int, help="Random seed")
+# parser.add_argument('--n_balls', default=3, type=int, help="# of balls in the scene")
+# parser.add_argument('--n_examples', default=3, type=int, help="# of experiments to generate")
+# args = parser.parse_args()
 
 cfg = read_config()
-COLORS = cfg['colors'][:args.n_balls]
 
+N_OBJ = cfg['balls']['n_obj']
+COLORS = cfg['colors'][:N_OBJ]
+
+LOGS_DIR = cfg['logs_dir']
 W = H = cfg['balls']['image_size']  # Image shape
 RANGE_POS = cfg['balls']['pos_range']
 RANGE_SPEED = cfg['balls']['speed_range']
 EPSILON = cfg['balls']['epsilon']  # Threshold for constraints
+FPS = cfg['balls']['fps']
+DURATION = cfg['balls']['duration']
 
+ARGS = cfg['balls']
+ARGS = argparse.Namespace(**ARGS)
 
 def check_bayes(alt_ab, alt_cd, ab, cd):
     """ Check the identifiability contraint
@@ -61,7 +68,7 @@ def check_counterfactual(alt_cd, cd, mass_permutation):
 
 
 class Generator:
-    def __init__(self, dir_out, seed, n_balls, nb_examples):
+    def __init__(self, args):
         """
         Class that oversees the experiment generation
         :param dir_out: Where experiments should be saved
@@ -69,20 +76,22 @@ class Generator:
         :param n_balls: # of balls in the scene
         :param nb_examples: # of experiments to generate
         """
-        self.dir_out = dir_out
-        self.seed = seed
 
-        random.seed(seed)
-        np.random.seed(seed)
+        self.args = args
+        self.data_dir = self.args.data_dir
+        self.seed = self.args.seed
 
-        self.mass_permutation = [list(combo) for combo in product([1, 10], repeat=args.n_balls)]
+        random.seed(self.seed)
+        np.random.seed(self.seed)
 
-        self.logs_cf = {str(d): 0 for d in self.mass_permutation}  # Useful to ensure balance in the dataset
-        self.n_balls = n_balls
+        self.n_balls = self.args.n_obj
+        self.mass_permutation = [list(combo) for combo in product([1, 10], repeat=self.n_balls)]
+        self.logs_cf = {str(d): 0 for d in self.mass_permutation}
+        self.logs_moving = {"ball": 0, "cylinder": 0}
+        self.logs_cylinder_orientation = {'up': 0, 'down': 0}
 
-        # LOGS variables
         self.list_time = []
-        self.nb_examples = nb_examples
+        self.nb_examples = self.args.n_rollout
 
         self.total_trial_counter = 0
         self.ab_trial_counter = 0
@@ -124,7 +133,7 @@ class Generator:
         index_cf = self.mass_permutation.index(cf)
 
         # Randomly sample colors
-        colors = random.sample(COLORS, args.n_balls)
+        colors = random.sample(COLORS, self.n_balls)
         return do_remove_op, index_cf, colors
 
     def find_valid_AB(self, masse):
@@ -188,7 +197,7 @@ class Generator:
             childPipes.append(childPipe)
 
         for rank in range(len(towers)):  # Run the processes
-            simulator = Simulator(25, 6, 0, W, H)  # Simulate at 25 FPS, for 6 second, no substeps.
+            simulator = Simulator(FPS, DURATION, 0, W, H)  # Simulate at 25 FPS, for 6 second, no substeps.
             p = mp.Process(target=simulator.run, args=(childPipes[rank], towers[rank], 0, colors, False))
             p.start()
             processes.append(p)
@@ -208,7 +217,7 @@ class Generator:
         :return: outcome
         """
         parentPipe, childPipe = mp.Pipe()
-        simulator = Simulator(25, 6, 0, W, H)
+        simulator = Simulator(FPS, DURATION, 0, W, H)
         p = mp.Process(target=simulator.run, args=(childPipe, arena, 0, colors, False))
         p.start()
         state, _, _, _ = parentPipe.recv()
@@ -233,7 +242,7 @@ class Generator:
             parentPipes.append(parentPipe)
             childPipes.append(childPipe)
 
-        simulator = Simulator(25, 6, 0, W, H)
+        simulator = Simulator(FPS, DURATION, 0, W, H)
         plane_id = random.randint(0, 3)
         p_ab = mp.Process(target=simulator.run, args=(childPipes[0], ab, plane_id, colors, True))
         p_cd = mp.Process(target=simulator.run, args=(childPipes[1], cd, plane_id, colors, True))
@@ -266,7 +275,7 @@ class Generator:
         assert len(cf_cubes) > 0
 
         # Create the paths
-        out_dir = self.dir_out + str(self.seed) + "_" + str(n) + "/"
+        out_dir = os.path.join(self.data_dir, str(self.seed) + "_" + str(n) + "/")
         os.makedirs(out_dir, exist_ok=True)
         os.makedirs(out_dir + 'ab', exist_ok=True)
         os.makedirs(out_dir + 'cd', exist_ok=True)
@@ -329,7 +338,7 @@ class Generator:
         writer.release()
 
         # Write some logs
-        with open("../logs/logs_create_dataset_balls_" + str(self.seed) + ".txt", "a") as f:
+        with open(LOGS_DIR + "logs_create_dataset_balls_" + str(self.seed) + ".txt", "a") as f:
             f.write(
                 f"{n}/{self.nb_examples} in {self.total_trial_counter} trial ({self.ab_trial_counter} on AB, {self.cd_trial_counter} on CD), took {round(self.list_time[-1], 1)} seconds (Average {round(np.mean(self.list_time), 2)})\n")
 
@@ -566,5 +575,5 @@ class Simulator:
 
 
 if __name__ == '__main__':
-    g = Generator(dir_out=args.dir_out, seed=args.seed, n_balls=args.n_balls, nb_examples=args.n_examples)
+    g = Generator(args=ARGS)
     g.generate()
