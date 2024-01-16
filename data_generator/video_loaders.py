@@ -6,11 +6,12 @@ import torchvision
 import pybullet as pb
 import cv2
 import torch
+from data_generator.utils import read_config
 
 
 class VideoLoader(Dataset):
     def __init__(self, mode="train", resolution=112, load_cd=True, sampling_mode="rand",
-                 load_ab=False, load_state=False, path=""):
+                 load_ab=False, load_state=False, load_confounders=False):
         """
         Dataloader for BallsCF
         :param mode: 'train', 'test' or 'val' split
@@ -25,24 +26,38 @@ class VideoLoader(Dataset):
         super(VideoLoader, self).__init__()
         assert sampling_mode in ['rand', 'fix', "full"]
 
-        self.index = None
-        self.dataloc = path
-        assert os.path.isdir(self.dataloc)
-
         self.mode = mode
         self.resolution = resolution
         self.load_cd = load_cd
         self.sampling_mode = sampling_mode
         self.load_ab = load_ab
         self.load_state = load_state
-        self.video_length = 0
+        self.load_confounders = load_confounders
 
-    def load_index(self, splits_filename):
-        with open(f"{splits_filename}_{self.mode}", "r") as file:
-            self.index = [int(k) for k in file.readlines()]
+        self.cfg = {}
+        self.load_config()
+
+        self.n_rollout = 0
+        self.data_path = ''
+        self.video_length = 0
+        self.seed = 1
+        self.scene = ""
+
+    def load_config(self):
+        self.cfg = read_config()
+
+    def load_scene_config(self):
+        config = self.cfg[self.scene]
+
+        self.data_path = self.cfg['root_data_path'] + self.scene
+        assert os.path.isdir(self.data_path)
+
+        self.n_rollout = config['n_rollout']
+        self.video_length = config['video_length']
+        self.seed = config['seed']
 
     def __len__(self):
-        return len(self.index)
+        return self.n_rollout
 
     def get_projection_matrix(self):
         """
@@ -51,21 +66,21 @@ class VideoLoader(Dataset):
         raise NotImplementedError("Please Implement this method")
 
     def __getitem__(self, item):
-        ex = self.index[item]
-        out = {'ex': ex}
+        out = {}
+        dir_name = str(self.seed) + "_" + str(item + 1)
         if self.load_ab:
-            ab = os.path.join(self.dataloc, str(ex), "ab", 'rgb.mp4')
+            ab = os.path.join(self.data_path, dir_name, "ab", 'rgb.mp4')
             rgb_ab, r_ab = get_rgb(ab, self.sampling_mode, self.video_length)
             out['rgb_ab'] = rgb_ab
 
         if self.load_cd:
-            cd = os.path.join(self.dataloc, str(ex), "cd", 'rgb.mp4')
+            cd = os.path.join(self.data_path, dir_name, "cd", 'rgb.mp4')
             rgb_cd, r_cd = get_rgb(cd, self.sampling_mode, self.video_length)
             out['rgb_cd'] = rgb_cd
 
         if self.load_state:
 
-            states = np.load(os.path.join(self.dataloc, str(ex), 'cd', 'states.npy'))
+            states = np.load(os.path.join(self.data_path, dir_name, 'cd', 'states.npy'))
 
             viewMatrix, projectionMatrix = self.get_projection_matrix()
             positions = states[..., :3]
@@ -79,6 +94,12 @@ class VideoLoader(Dataset):
                         pose_2d[-1].append(np.zeros(2))
             pose_2d = np.array(pose_2d)
             out["pose_2D_cd"] = pose_2d[r_cd, :, :]
+            print(states)
+
+        if self.load_confounders:
+            confounders = np.load(os.path.join(self.data_path, dir_name, 'confounders.npy'))
+            out["confounders"] = confounders
+            print(confounders)
 
         return out
 
@@ -87,11 +108,11 @@ class BallsLoader(VideoLoader):
     def __init__(self, **kwargs):
         super(BallsLoader, self).__init__(**kwargs)
 
-        self.load_index(f"Datasets/ballsCF_4")
-        self.video_length = 150
+        self.scene = "balls"
+        self.load_scene_config()
 
     def __len__(self):
-        return len(self.index)
+        return self.n_rollout
 
     def get_projection_matrix(self):
         viewMatrix = np.array(pb.computeViewMatrix([0, 0.01, 8], [0, 0, 0], [0, 0, 1])).reshape(
@@ -104,11 +125,11 @@ class BlocktowerLoader(VideoLoader):
     def __init__(self, **kwargs):
         super(BlocktowerLoader, self).__init__(**kwargs)
 
-        self.load_index(f"Datasets/blocktowerCF_4")
-        self.video_length = 150
+        self.scene = "blocktower"
+        self.load_scene_config()
 
     def __len__(self):
-        return len(self.index)
+        return self.n_rollout
 
     def get_projection_matrix(self):
         viewMatrix = np.array(pb.computeViewMatrix([0, -7, 4.5], [0, 0, 1.5], [0, 0, 1])).reshape(
@@ -121,11 +142,11 @@ class CollisionLoader(VideoLoader):
     def __init__(self, **kwargs):
         super(CollisionLoader, self).__init__(**kwargs)
 
-        self.load_index(f"Datasets/collisionCF")
-        self.video_length = 75
+        self.scene = "collision"
+        self.load_scene_config()
 
     def __len__(self):
-        return len(self.index)
+        return self.n_rollout
 
     def get_projection_matrix(self):
         viewMatrix = np.array(pb.computeViewMatrix([0, -7, 4.5], [0, 0, 1.5], [0, 0, 1])).reshape(

@@ -1,25 +1,37 @@
 ---
 colors: ['red', 'green', 'blue', 'yellow']
+root_data_path: ./data/
 
-block_tower:
+blocktower:
   image_size: 112
   epsilon: 100
+  video_length: 150
+  seed: 1
+  n_rollout: 2
 
 collision:
   image_size: 448
   pos_range: 3
   speed_range: 10
   epsilon: 100
+  video_length: 75
+  seed: 1
+  n_rollout: 2
 
 balls:
   image_size: 112
   pos_range: 3
   speed_range: 3
   epsilon: 100
+  video_length: 150
+  seed: 1
+  n_rollout: 2
 
 balls2D:
   image_size: 112
   pos_range: 3
   speed_range: 3
   epsilon: 100
+  seed: 1
+  n_rollout: 2
 

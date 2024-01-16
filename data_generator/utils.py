@@ -19,7 +19,7 @@ def read_config():
     read config settings
     :return: config dir
     """
-    config_filename = "../config/datagen_config.yaml"
+    config_filename = "E:/Github/CasualDiscovery/DatasetGeneration/config/datagen_config.yaml"
     with open(config_filename, 'r') as ymlfile:
         cfg = yaml.load(ymlfile, Loader=Loader)
     return cfg

@@ -1,6 +1,8 @@
+import os
+
 import torch
 import argparse
-from Models.Derendering import Derendering
+from models.Derendering import Derendering
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -9,15 +11,17 @@ import random
 from skimage.metrics import peak_signal_noise_ratio
 import numpy as np
 
+from data_generator.video_loaders import BlocktowerLoader, BallsLoader, CollisionLoader
+
+# os.chdir(os.path.dirname(os.path.abspath(__file__)))
 parser = argparse.ArgumentParser()
-parser.add_argument('--epoch', default=10, type=int, help="Number of Epoch for training. Can be set to 0 for evaluation")
+parser.add_argument('--epoch', default=1, type=int, help="Number of Epoch for training. Can be set to 0 for evaluation")
 parser.add_argument('--n_keypoints', default=4, type=int, help="Number of keypoints to use")
 parser.add_argument('--dataset', default="blocktower", type=str, help="Datasets, should be one of 'blocktower', 'balls' or 'collision")
 parser.add_argument('--lr', default=0.0001, type=float, help="Learning Rate")
 parser.add_argument('--n_coefficients', default=4, type=int, help="Number of coefficients to use")
 parser.add_argument('--mode', default="fixed", type=str, help="'fixed': use fixed dilatation filter bank. 'learned': learn the filters via gradient descent")
-parser.add_argument('--seed', default=0, type=int, help="Random seed")
-parser.add_argument('--video_path', default="/Volumes/Samsung_T5/CoPhy_Dataset/CoPhy_112/blocktowerCF/4/", type=str, help="Path to video dataset")
+parser.add_argument('--seed', default=1, type=int, help="Random seed")
 parser.add_argument('--name', default='derendering', type=str, help="Name for weight saving")
 args = parser.parse_args()
 
@@ -25,17 +29,17 @@ use_cuda = True
 device = torch.device("cuda" if torch.cuda.is_available() and use_cuda else "cpu")
 
 MSE = nn.MSELoss()
-BATCHSIZE = 64
+BATCHSIZE = 1
 
-SAVE_PATH = f"trained_models/unsupervisedDerendering/{args.name}.nn"
-datasets = {"blocktower": blocktowerCF_Video, "balls": ballsCF_Video, "collision": collisionCF_Video}
+os.makedirs("./trained_models/unsupervised_derendering", exist_ok=True)
+SAVE_PATH = f"./trained_models/unsupervised_derendering/{args.name}.nn"
+datasets = {"blocktower": BlocktowerLoader, "balls": BallsLoader, "collision": CollisionLoader}
 
 
 def evaluate():
     print(args)
     dataloader = DataLoader(
-        datasets[args.dataset](mode='test', resolution=112, sampling_mode="fix", load_state=True, load_cd=True,
-                               path=args.video_path), batch_size=1, shuffle=False)
+        datasets[args.dataset](mode='test', resolution=112, sampling_mode="fix", load_state=True, load_cd=True), batch_size=1, shuffle=False)
 
     # Path to the saved weights
     state_dict = torch.load(SAVE_PATH, map_location=device)
@@ -135,16 +139,17 @@ def get_loss(target, target_hat):
 
 def main():
     print(args)
+
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     np.random.seed(args.seed)
 
     train_dataloader = DataLoader(
-        datasets[args.dataset](mode='train', resolution=112, sampling_mode="rand", path=args.video_path),
+        datasets[args.dataset](mode='train', resolution=112, sampling_mode="rand"),
         batch_size=BATCHSIZE, num_workers=1, pin_memory=True, shuffle=True)
     val_dataloader = DataLoader(
-        datasets[args.dataset](mode='val', resolution=112, sampling_mode='fix', path=args.video_path),
-        batch_size=32, num_workers=1, pin_memory=True)
+        datasets[args.dataset](mode='val', resolution=112, sampling_mode='fix'),
+        batch_size=BATCHSIZE, num_workers=1, pin_memory=True)
 
     model = Derendering(n_keypoints=args.n_keypoints,
                         mode=args.mode,
