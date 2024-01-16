@@ -1,3 +1,4 @@
+import os
 import random
 import sys
 
@@ -71,6 +72,7 @@ data utils
 
 
 def store_data(data_names, data, path):
+    os.makedirs(path, exist_ok=True)
     hf = h5py.File(path, 'w')
     for i in range(len(data_names)):
         hf.create_dataset(data_names[i], data=data[i])
