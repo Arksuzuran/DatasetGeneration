@@ -97,10 +97,28 @@ def main():
                         B = kps_gt.size(0)
 
                         if show_data_shape:
+
+                            print("=== Shapes of vcdn Data===")
                             print("image\t\t [B, chosen_frames, channel, W, H]:\t", imgs.shape)
                             print("ball_position\t [B, chosen_frames, n_ball, x&y]:\t", kps_gt.shape)
+
+                            print("=== Shapes of vcdn Casual Graph===")
+
+                            """
+                            edge_type: Pairwise constraint type between balls
+                            no relation, Spring or SlideJoint
+                            n_type == 3
+                            """
                             print("edge_type\t [B, n_ball, n_ball, n_type]:\t\t", graph_gt[0].shape)
+
+                            """
+                            edge_attr: The initial distance between the balls
+                            """
                             print("edge_attr\t [B, n_ball, n_ball, n_attr]:\t\t", graph_gt[1].shape)
+
+                            """
+                            actions: The force (acceleration) applied to the ball per frame
+                            """
                             print("actions\t\t [B, chosen_frame, n_obj, Fx&Fy]:\t", actions.shape)
                             show_data_shape = False
 

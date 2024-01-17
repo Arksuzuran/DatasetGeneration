@@ -14,6 +14,7 @@ from utils import read_config
 
 cfg = read_config()
 
+
 # parser = argparse.ArgumentParser()
 # parser.add_argument('--dir_out', default='test/', type=str)
 # parser.add_argument('--seed', default=0, type=int)

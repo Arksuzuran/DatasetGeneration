@@ -10,11 +10,11 @@ from data_generator.utils import read_config
 
 
 class VideoLoader(Dataset):
-    def __init__(self, mode="train", resolution=112, load_cd=True, sampling_mode="rand",
+    def __init__(self, phase="train", resolution=112, load_cd=True, sampling_mode="rand",
                  load_ab=False, load_state=True, load_confounders=True):
         """
         Dataloader for BallsCF
-        :param mode: 'train', 'test' or 'val' split
+        :param phase: 'train', 'test' or 'val' split
         :param resolution: Image resolution, default is 112x112
         :param load_cd: if False, the dataloader does not read CD video
         :param sampling_mode: 'rand' for random selection in the video, 'fix' for sampling at fixed timestamps and
@@ -26,7 +26,7 @@ class VideoLoader(Dataset):
         super(VideoLoader, self).__init__()
         assert sampling_mode in ['rand', 'fix', "full"]
 
-        self.mode = mode
+        self.phase = phase
         self.resolution = resolution
         self.load_cd = load_cd
         self.sampling_mode = sampling_mode
@@ -81,7 +81,7 @@ class VideoLoader(Dataset):
         if self.load_state:
 
             states = np.load(os.path.join(self.data_path, dir_name, 'cd', 'states.npy'))
-            out["states"] = states
+            out["states_cd"] = states
 
             viewMatrix, projectionMatrix = self.get_projection_matrix()
             positions = states[..., :3]

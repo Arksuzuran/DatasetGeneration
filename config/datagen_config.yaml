@@ -3,6 +3,15 @@ colors: ['red', 'green', 'blue', 'yellow']
 root_data_path: ./data/
 logs_dir: ./logs/
 
+sprites:
+  # IO
+  material_dir: ./data_generator/sprites_material/
+  frame_save_dir: ./data/sprites/frames/
+  npy_save_dir: ./data/sprites/npy/
+
+  # 3 Gestures made by the character
+  selected_actions: ['spellcard', 'walk', 'slash']
+
 blocktower:
   # IO
   data_dir: ./data/blocktower/

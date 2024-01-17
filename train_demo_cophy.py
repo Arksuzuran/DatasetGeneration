@@ -145,10 +145,10 @@ def main():
     np.random.seed(args.seed)
 
     train_dataloader = DataLoader(
-        datasets[args.dataset](mode='train', resolution=112, sampling_mode="rand"),
+        datasets[args.dataset](phase='train', resolution=112, sampling_mode="rand"),
         batch_size=BATCHSIZE, num_workers=1, pin_memory=True, shuffle=True)
     val_dataloader = DataLoader(
-        datasets[args.dataset](mode='val', resolution=112, sampling_mode='fix'),
+        datasets[args.dataset](phase='val', resolution=112, sampling_mode='fix'),
         batch_size=BATCHSIZE, num_workers=1, pin_memory=True)
 
     model = Derendering(n_keypoints=args.n_keypoints,
@@ -164,10 +164,27 @@ def main():
         print("=== EPOCH ", epoch + 1, " ===")
         for i, x in enumerate(tqdm(train_dataloader, desc="Training")):
             rgb = x['rgb_cd'].to(device)
-            states = x["states"].to(device)
+            states = x["states_cd"].to(device)
             confounders = x["confounders"].to(device)
-            print("image\t\t [B, chosen_frames, channel, W, H]:\t", rgb.shape)
+
+            print("=== Shapes of Cophy Data ===")
+
+            """
+            chosen frames from video cd
+            which frame is extracted depends on the dataloader
+            """
+            print("images\t\t [B, chosen_frames, channel, W, H]:\t", rgb.shape)
+
+            """
+            motion trail of video cd
+            13 = 3 + 4 + 4 + 3
+            (Position coordinates, direction of motion, velocity, angular velocity)
+            """
             print("states\t\t [B, all_frames, n_obj, motion_attr]:\t", states.shape)
+
+            """
+            mass of objects
+            """
             print("confounders\t [B, n_obj]:\t\t\t\t", confounders.shape)
 
     #         source, target = rgb[:, 0], rgb[:, 1]
